@@ -1,13 +1,14 @@
 {
     "name": "libxvid",
     "description": "XVid decoder",
-    "filters":["xviddec"],
+    "filters":["xviddec","rfmpgvid"],
     "help": "This filter decodes MPEG-4 part 2 (and DivX) through libxvidcore library.",
     "support": [
         "video"
     ],
     "sources":"https://codeload.github.com/Bevara/libxvid/zip/refs/heads/main",
     "filter_source":{
-        "xviddec" : "dec_xvid.c"
+        "xviddec" : "dec_xvid.c",
+        "rfmpgvid" : "reframe_mpegvid.c"
     }
 }
