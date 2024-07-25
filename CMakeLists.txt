@@ -7,6 +7,8 @@ add_definitions(-fpic)
 
 SET(XVIDDEC_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/dec_xvid.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/reframe_mpgvid.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/av_parsers.c
 )
 
 SET(XVIDDEC_INCLUDE

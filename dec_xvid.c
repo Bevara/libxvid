@@ -464,7 +464,7 @@ GF_FilterRegister XVIDRegister = {
 
 #endif
 
-const GF_FilterRegister *xviddec_register(GF_FilterSession *session)
+const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE dynCall_xviddec_register(GF_FilterSession *session)
 {
 #if !defined(GPAC_DISABLE_AV_PARSERS) && defined(GPAC_HAS_XVID)
 	return &XVIDRegister;
