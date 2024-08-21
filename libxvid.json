@@ -10,5 +10,7 @@
     "filter_source":{
         "xviddec" : "dec_xvid.c",
         "rfmpgvid" : "reframe_mpegvid.c"
-    }
+    },
+    "Format": ["xvid","MPEG-4 Visual"],
+    "licence_required":false
 }
