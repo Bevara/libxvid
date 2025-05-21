@@ -2,7 +2,7 @@
  *			GPAC - Multimedia Framework C SDK
  *
  *			Authors: Jean Le Feuvre
- *			Copyright (c) Telecom ParisTech 2017-2024
+ *			Copyright (c) Telecom ParisTech 2017-2025
  *					All rights reserved
  *
  *  This file is part of GPAC / filters sub-project
@@ -98,7 +98,7 @@ The filter management in GPAC is built using the following core objects:
 
 
 GPAC comes with a set of built-in filters in libgpac. It is also possible to define external filters in dynamic libraries. GPAC will look for such libraries
- in default module folder and  folders listed in GPAC config file section core, key mod-dirs. The files SHALL be named gf_* and export a function called RegisterFilter
+ in default module folder and folders listed in GPAC config file section core, key mod-dirs. The files SHALL be named gf_* and export a function called RegisterFilter
  with the following prototype:
 
 
@@ -242,7 +242,10 @@ typedef enum
 	GF_FS_FLAG_REQUIRE_SOURCE_ID = 1<<12,
 	/*! Flag set to force all explicitly added filters to be loaded in deferred link state - linking will only happen once  \ref gf_filter_reconnect_output is called on the filter.
 	*/
-	GF_FS_FLAG_FORCE_DEFER_LINK = 1<<13
+	GF_FS_FLAG_FORCE_DEFER_LINK = 1<<13,
+	/*! Flag set to ignore all PLAY events from sinks - use \ref gf_fs_send_deferred_play to start playback
+	*/
+	GF_FS_FLAG_PREVENT_PLAY = 1<<14
 } GF_FilterSessionFlags;
 
 /*! Creates a new filter session. This will also load all available filter registers not blacklisted.
@@ -290,7 +293,7 @@ Generic filter options are:
 - ccp: filter replacement control (string list value)
 - NCID: ID of netcap configuration to use (string)
 - DBG: debug missing input PID property (`=pid`), missing input packet property (`=pck`) or both (`=all`)
-- DL: enable defer linkling of filter (no value) - the filter output pids will not be connected until a call to \ref gf_filter_reconnect_output
+- DL: enable defer linking of filter (no value) - the filter output pids will not be connected until a call to \ref gf_filter_reconnect_output
 
 
 \param session filter session
@@ -424,6 +427,11 @@ void gf_fs_add_filter_register(GF_FilterSession *session, const GF_FilterRegiste
 */
 void gf_fs_remove_filter_register(GF_FilterSession *session, GF_FilterRegister *freg);
 
+/*! Sends PLAY event on all sinks, ignored if GF_FS_FLAG_PREVENT_PLAY flag is not set
+\param session filter session
+*/
+void gf_fs_send_deferred_play(GF_FilterSession *session);
+
 /*! Posts a user task to the session
 \param session filter session
 \param task_execute the callback function for the task. The callback can return:
@@ -434,6 +442,20 @@ void gf_fs_remove_filter_register(GF_FilterSession *session, GF_FilterRegister *
 \return the error code if any
 */
 GF_Err gf_fs_post_user_task(GF_FilterSession *session, Bool (*task_execute) (GF_FilterSession *fsess, void *callback, u32 *reschedule_ms), void *udta_callback, const char *log_name);
+
+
+/*! Posts a user task to the session
+\param session filter session
+\param task_execute the callback function for the task. The callback can return:
+ - GF_FALSE to cancel the task
+ - GF_TRUE to reschedule the task, in which case the task will be rescheduled immediately or after reschedule_ms.
+\param udta_callback callback user data passed back to the task_execute function
+\param log_name log name of the task. If NULL, default is "user_task"
+\param delay delay in milliseconds before calling the task
+\return the error code if any
+*/
+GF_Err gf_fs_post_user_task_delay(GF_FilterSession *session, Bool (*task_execute) (GF_FilterSession *fsess, void *callback, u32 *reschedule_ms), void *udta_callback, const char *log_name, u32 delay);
+
 
 /*! Posts a user task to the session main thread only
 \param session filter session
@@ -746,6 +768,13 @@ GF_Err gf_fs_set_filter_creation_callback(GF_FilterSession *session, gf_fs_on_fi
  */
 void *gf_fs_get_rt_udta(GF_FilterSession *session);
 
+/*! Checks if a filter is still valid - typically used when not monitoring filter destruction at session level using \ref gf_fs_set_filter_creation_callback
+\param session filter session
+\param filter filter to check
+\return GF_TRUE if filter is still valid until the next call to \ref gf_fs_run, GF_FALSE otherwise
+*/
+Bool gf_fs_check_filter(GF_FilterSession *session, GF_Filter *filter);
+
 /*! Fires an event on filter
 \param session filter session
 \param filter target filter - if NULL, event will be executed on all filters. Otherwise, the event will be executed directly if its type is \ref GF_FEVT_USER, and fired otherwise
@@ -754,7 +783,6 @@ void *gf_fs_get_rt_udta(GF_FilterSession *session);
 \return GF_TRUE if event was sent, GF_FALSE otherwise
  */
 Bool gf_fs_fire_event(GF_FilterSession *session, GF_Filter *filter, GF_FilterEvent *evt, Bool upstream);
-
 
 /*! callback functions for external monitoring of filter creation or destruction
 \param udta user data passed back to callback
@@ -770,6 +798,7 @@ typedef	GF_Err (*gf_fs_gl_activate)(void *udta, Bool do_activate);
 \return error if any
  */
 GF_Err gf_fs_set_external_gl_provider(GF_FilterSession *session, gf_fs_gl_activate on_gl_activate, void *udta);
+
 
 /*! Flags for debug info*/
 typedef enum
@@ -849,7 +878,7 @@ typedef enum
 	GF_PROP_VEC4I		=	13,
 	/*! string property, memory is duplicated when setting the property and managed internally*/
 	GF_PROP_STRING		=	14,
-	/*! string property, memory is NOT duplicated when setting the property but is then managed (and free) internally.
+	/*! string property, memory is NOT duplicated when setting the property but is then managed (and freed) internally.
 	Only used when setting a property, the type then defaults to GF_PROP_STRING
 	DO NOT USE the associate string field upon return from setting the property, it might have been destroyed*/
 	GF_PROP_STRING_NO_COPY=	15,
@@ -880,7 +909,7 @@ typedef enum
 	GF_PROP_4CC_LIST	=	26,
 	/*! string list, memory is duplicated when setting the property - to use only with property assignment functions*/
 	GF_PROP_STRING_LIST_COPY = 27,
-	
+
 	/*! last non-enum property*/
 	GF_PROP_LAST_NON_ENUM,
 
@@ -897,6 +926,8 @@ typedef enum
 	GF_PROP_CICP_COL_TFC	=	GF_PROP_FIRST_ENUM+3,
 	/*! CICP Color Matrix*/
 	GF_PROP_CICP_COL_MX		=	GF_PROP_FIRST_ENUM+4,
+	/*! CICP Layout*/
+	GF_PROP_CICP_LAYOUT		=	GF_PROP_FIRST_ENUM+5,
 	/*! not allowed*/
 	GF_PROP_LAST_DEFINED
 } GF_PropType;
@@ -1059,6 +1090,9 @@ typedef enum
 
 /*! Built-in property types
 See gpac help (gpac -h props) for codes, types, formats and and meaning
+
+All these property must use capital alpha-numerical code, no space or special charcters allowed.
+
 	\hideinitializer
 */
 enum
@@ -1088,6 +1122,7 @@ enum
 	GF_PROP_PID_UNFRAMED = GF_4CC('P','F','R','M'),
 	GF_PROP_PID_UNFRAMED_FULL_AU = GF_4CC('P','F','R','F'),
 	GF_PROP_PID_DURATION = GF_4CC('P','D','U','R'),
+	GF_PROP_PID_DURATION_AVG = GF_4CC('E','D','U','R'),
 	GF_PROP_PID_NB_FRAMES = GF_4CC('N','F','R','M'),
 	GF_PROP_PID_FRAME_OFFSET = GF_4CC('F','R','M','O'),
 	GF_PROP_PID_FRAME_SIZE = GF_4CC('C','F','R','S'),
@@ -1108,6 +1143,7 @@ enum
 	GF_PROP_PID_AUDIO_FORMAT = GF_4CC('A','F','M','T'),
 	GF_PROP_PID_AUDIO_SPEED = GF_4CC('A','S','P','D'),
 	GF_PROP_PID_UNFRAMED_LATM = GF_4CC('L','A','T','M'),
+	GF_PROP_PID_UNFRAMED_SRT = GF_4CC('U','S','R','T'),
 	GF_PROP_PID_DELAY = GF_4CC('M','D','L','Y'),
 	GF_PROP_PID_CTS_SHIFT = GF_4CC('M','D','T','S'),
 	GF_PROP_PID_NO_PRIMING = GF_4CC('A','S','K','P'),
@@ -1132,7 +1168,7 @@ enum
 	GF_PROP_PID_HIDDEN = GF_4CC('H','I','D','E'),
 	GF_PROP_PID_CROP_POS = GF_4CC('V','C','X','Y'),
 	GF_PROP_PID_ORIG_SIZE = GF_4CC('V','O','W','H'),
-	GF_PROP_PID_SRD = GF_4CC('S','R','D',' '),
+	GF_PROP_PID_SRD = GF_4CC('S','R','D','I'),
 	GF_PROP_PID_SRD_REF = GF_4CC('S','R','D','R'),
 	GF_PROP_PID_SRD_MAP = GF_4CC('S','R','D','M'),
 	GF_PROP_PID_ALPHA = GF_4CC('V','A','L','P'),
@@ -1154,6 +1190,7 @@ enum
 	GF_PROP_PID_REMOTE_URL = GF_4CC('R','U','R','L'),
 	GF_PROP_PID_REDIRECT_URL = GF_4CC('R','E','L','O'),
 	GF_PROP_PID_FILEPATH = GF_4CC('F','S','R','C'),
+	GF_PROP_PID_FILEALIAS = GF_4CC('F','A','L','I'),
 	GF_PROP_PID_MIME = GF_4CC('M','I','M','E'),
 	GF_PROP_PID_FILE_EXT = GF_4CC('F','E','X','T'),
 	GF_PROP_PID_OUTPATH = GF_4CC('F','D','S','T'),
@@ -1181,7 +1218,6 @@ enum
 	GF_PROP_PID_ISMA_SELECTIVE_ENC = GF_4CC('I','S','S','E'),
 	GF_PROP_PID_ISMA_IV_LENGTH = GF_4CC('I','S','I','V'),
 	GF_PROP_PID_ISMA_KI_LENGTH = GF_4CC('I','S','K','I'),
-	GF_PROP_PID_ISMA_KI = GF_4CC('I','K','E','Y'),
 	GF_PROP_PID_OMA_CRYPT_TYPE = GF_4CC('O','M','C','T'),
 	GF_PROP_PID_OMA_CID = GF_4CC('O','M','I','D'),
 	GF_PROP_PID_OMA_TXT_HDR = GF_4CC('O','M','T','H'),
@@ -1212,6 +1248,11 @@ enum
 	GF_PROP_PCK_UTC_TIME = GF_4CC('U','T','C','D'),
 	GF_PROP_PCK_MEDIA_TIME = GF_4CC('M','T','I','M'),
 	GF_PROP_PCK_MPD_SEGSTART = GF_4CC('F','M','S','S'),
+	GF_PROP_PCK_ID = GF_4CC('P','K','I','D'),
+	GF_PROP_PCK_REFS = GF_4CC('P','R','F','S'),
+	GF_PROP_PCK_UDTA = GF_4CC('P','U','D','T'),
+	GF_PROP_PCK_LLHAS_TEMPLATE = GF_4CC('P','S','R','T'),
+	GF_PROP_PCK_TIMECODE = GF_4CC('T','C','O','D'),
 
 	GF_PROP_PID_MAX_FRAME_SIZE = GF_4CC('M','F','R','S'),
 	GF_PROP_PID_AVG_FRAME_SIZE = GF_4CC('A','F','R','S'),
@@ -1234,11 +1275,13 @@ enum
 	GF_PROP_PID_PERIOD_START = GF_4CC('P','E','S','T'),
 	GF_PROP_PID_PERIOD_DUR = GF_4CC('P','E','D','U'),
 	GF_PROP_PID_REP_ID = GF_4CC('D','R','I','D'),
+	GF_PROP_PID_SSR = GF_4CC('S','S','R','R'),
 	GF_PROP_PID_AS_ID = GF_4CC('D','A','I','D'),
 	GF_PROP_PID_MUX_SRC = GF_4CC('M','S','R','C'),
 	GF_PROP_PID_DASH_MODE = GF_4CC('D','M','O','D'),
 	GF_PROP_PID_FORCE_SEG_SYNC = GF_4CC('D','F','S','S'),
 	GF_PROP_PID_DASH_DUR = GF_4CC('D','D','U','R'),
+	GF_PROP_PID_DASH_FDUR = GF_4CC('F','D','U','R'),
 	GF_PROP_PID_DASH_MULTI_PID = GF_4CC('D','M','S','D'),
 	GF_PROP_PID_DASH_MULTI_PID_IDX = GF_4CC('D','M','S','I'),
 	GF_PROP_PID_DASH_MULTI_TRACK = GF_4CC('D','M','T','K'),
@@ -1254,6 +1297,7 @@ enum
 	GF_PROP_PID_CLAMP_DUR = GF_4CC('D','C','M','D'),
 	GF_PROP_PID_HLS_PLAYLIST = GF_4CC('H','L','V','P'),
 	GF_PROP_PID_HLS_GROUPID = GF_4CC('H','L','G','I'),
+	GF_PROP_PID_HLS_GROUP_REND = GF_4CC('H','L','G','R'),
 	GF_PROP_PID_HLS_FORCE_INF = GF_4CC('H','L','F','I'),
 	GF_PROP_PID_HLS_EXT_MASTER = GF_4CC('H','L','M','X'),
 	GF_PROP_PID_HLS_EXT_VARIANT = GF_4CC('H','L','V','X'),
@@ -1272,6 +1316,7 @@ enum
 
 	GF_PROP_PID_COLR_PRIMARIES = GF_4CC('C','P','R','M'),
 	GF_PROP_PID_COLR_TRANSFER = GF_4CC('C','T','R','C'),
+	GF_PROP_PID_COLR_TRANSFER_ALT = GF_4CC('C','A','T','C'),
 	GF_PROP_PID_COLR_MX = GF_4CC('C','M','X','C'),
 	GF_PROP_PID_COLR_RANGE = GF_4CC('C','F','R','A'),
 	GF_PROP_PID_COLR_CHROMAFMT = GF_4CC('C','F','M','T'),
@@ -1293,12 +1338,13 @@ enum
 	GF_PROP_PID_KEEP_AFTER_EOS = GF_4CC('P','K','A','E'),
 	GF_PROP_PID_COVER_ART = GF_4CC('P','C','O','V'),
 	GF_PROP_PID_ORIG_FRAG_URL = GF_4CC('O','F','R','A'),
+	GF_PROP_PID_VOD_SIDX_RANGE = GF_4CC('P','R','S','R'),
 
-	GF_PROP_PID_ROUTE_IP = GF_4CC('R','S','I','P'),
-	GF_PROP_PID_ROUTE_PORT = GF_4CC('R','S','P','N'),
-	GF_PROP_PID_ROUTE_NAME = GF_4CC('R','S','F','N'),
-	GF_PROP_PID_ROUTE_CAROUSEL = GF_4CC('R','S','C','R'),
-	GF_PROP_PID_ROUTE_SENDTIME = GF_4CC('R','S','S','T'),
+	GF_PROP_PID_MCAST_IP = GF_4CC('M','S','I','P'),
+	GF_PROP_PID_MCAST_PORT = GF_4CC('M','S','P','N'),
+	GF_PROP_PID_MCAST_NAME = GF_4CC('M','S','F','N'),
+	GF_PROP_PID_MCAST_CAROUSEL = GF_4CC('M','S','C','R'),
+	GF_PROP_PID_MCAST_SENDTIME = GF_4CC('M','S','S','T'),
 
 	GF_PROP_PID_STEREO_TYPE = GF_4CC('P','S','T','T'),
 	GF_PROP_PID_PROJECTION_TYPE = GF_4CC('P','P','J','T'),
@@ -1316,21 +1362,26 @@ enum
 	GF_PROP_PID_CHAP_TIMES = GF_4CC('C','H','P','T'),
 	GF_PROP_PID_CHAP_NAMES = GF_4CC('C','H','P','N'),
 	GF_PROP_PID_IS_CHAP = GF_4CC('P','C','H','P'),
-	//internal prop indicating the (main) streamtype of a PID before mux, only used for route setup
 	GF_PROP_PID_PREMUX_STREAM_TYPE = GF_4CC('P','P','S','T'),
 
 	GF_PROP_PID_CODEC_MERGEABLE = GF_4CC('P','C','M','B'),
-	GF_PROP_PID_FILE_REL = GF_4CC('F','N','R','L'),
+	GF_PROP_PCK_FILE_REL = GF_4CC('F','N','R','L'),
 
 
 	//internal for HLS playlist reference, gives a unique ID identifying media mux, and indicated in packets carrying child playlists
 	GF_PROP_PCK_HLS_REF = GF_4CC('H','P','L','R'),
-	//internal for HLS low latency
-	GF_PROP_PID_LLHLS = GF_4CC('H','L','S','L'),
-	GF_PROP_PCK_HLS_FRAG_NUM = GF_4CC('H','L','S','N'),
+	GF_PROP_PID_HLS_REF = GF_4CC('P','H','L','R'),
+	//internal for low latency HLS abd DASH:
+	//0 or not present: no low latency
+	//1: LL-HLS byte-range mode
+	//2: LL-HLS or DASH SSR separate parts mode
+	GF_PROP_PID_LLHAS_MODE = GF_4CC('H','L','H','S'),
+	// part number for LLHLS or DSH-SSR
+	GF_PROP_PCK_LLHAS_FRAG_NUM = GF_4CC('H','L','S','N'),
 	//we also use this property on PID to signal sample-accurate seek info is present
 	GF_PROP_PCK_SKIP_BEGIN = GF_4CC('P','C','K','S'),
 	GF_PROP_PCK_SKIP_PRES = GF_4CC('P','C','K','D'),
+	GF_PROP_PCK_ORIG_DUR = GF_4CC('P','C','O','D'),
 	//internal for DASH forward mode
 	GF_PROP_PID_DASH_FWD = GF_4CC('D','F','W','D'),
 	GF_PROP_PCK_DASH_MANIFEST = GF_4CC('D','M','P','D'),
@@ -1340,19 +1391,19 @@ enum
 	GF_PROP_PID_HLS_KMS = GF_4CC('H','L','S','K'),
 	GF_PROP_PID_HLS_IV = GF_4CC('H','L','S','I'),
 	GF_PROP_PID_CLEARKEY_URI = GF_4CC('C','C','K','U'),
-	//internal
 	GF_PROP_PID_CLEARKEY_KID = GF_4CC('C','C','K','I'),
-	//internal, indicate DASH segments are generated in sparse mode (from context)
 	GF_PROP_PID_DASH_SPARSE = GF_4CC('D','S','S','G'),
-	//internal, indicate DASH dependency group
 	GF_PROP_PID_DASH_DEP_GROUP = GF_4CC('D','G','D','I'),
+	GF_PROP_PCK_DASH_PERIOD_START = GF_4CC('P','D','P','S'),
+
+	GF_PROP_PID_HAS_SKIP_BEGIN = GF_4CC('P','S','B','P'),
 
 	//internal property indicating pointer to associated GF_DownloadSession
 	GF_PROP_PID_DOWNLOAD_SESSION = GF_4CC('G','H','T','T'),
 
 	//PID has temi information
 	GF_PROP_PID_HAS_TEMI = GF_4CC('P','T','E','M'),
-	//PID has no init segment associated (file forward mode of dasher)
+	GF_PROP_PID_SCTE35_PID = GF_4CC('S','C','3','5'),
 	GF_PROP_PID_NO_INIT = GF_4CC('P','N','I','N'),
 
 	//PID carries a manifest
@@ -1361,26 +1412,35 @@ enum
 	GF_PROP_PCK_XPS_MASK = GF_4CC('P','X','P','M'),
 	GF_PROP_PCK_END_RANGE = GF_4CC('P','C','E','R'),
 
-	//internal, force creation of rewriter filter (only used for forcing reparse of NALU-based codecs)
 	GF_PROP_PID_FORCE_UNFRAME = GF_4CC('P','F','U','F'),
 
 	GF_PROP_PCK_SPLIT_START = GF_4CC('P','S','P','S'),
 	GF_PROP_PCK_SPLIT_END = GF_4CC('P','S','P','E'),
+	GF_PROP_PID_INIT_NAME = GF_4CC('P','I','N','M'),
 
+	GF_PROP_PCK_SEG_URL = GF_4CC('S','U','R','L'),
+	GF_PROP_PCK_CENC_PSSH = GF_4CC('P','S','H','P'),
 
-	/*! Internal property used for meta demuxers ( FFMPEG, ...) codec ID
+	/*! Internal property used for meta demuxers ( FFmpeg, ...) codec ID
 
 	Property can be:
 	- pointer to codec context: only for ffdmx with old ffmpeg versions)
 	- uint: AVCODEC_ID_*  ffdmx with newer versions or ffenc output
 	*/
 	GF_PROP_PID_META_DEMUX_CODEC_ID = GF_4CC('M','D','C','I'),
-
-	/*! Internal property used for meta demuxers ( FFMPEG, ...) codec name*/
 	GF_PROP_PID_META_DEMUX_CODEC_NAME = GF_4CC('M','D','C','N'),
 
-	/*! Internal property used for meta demuxers ( FFMPEG, ...) codec opaque data, u32*/
+	/*! Internal property used for meta demuxers ( FFmpeg, ...) codec opaque data, u32*/
 	GF_PROP_PID_META_DEMUX_OPAQUE = GF_4CC('M','D','O','P'),
+
+	GF_PROP_PCK_PARTIAL_REPAIR = GF_4CC('P','C','P','R'),
+	GF_PROP_PID_FAKE = GF_4CC('P','F','A','K'),
+
+	GF_PROP_PID_SEI_LOADED = GF_4CC('P','S','E','I'),
+	GF_PROP_PCK_SEI_LOADED = GF_4CC('S','E','I','P'),
+	GF_PROP_PCK_CONTENT_LIGHT_LEVEL = GF_4CC('C','L','L','P'),
+	GF_PROP_PCK_MASTER_DISPLAY_COLOUR = GF_4CC('M','D','C','P'),
+
 };
 
 /*! Block patching requirements for FILE pids, as signaled by GF_PROP_PID_DISABLE_PROGRESSIVE
@@ -1450,6 +1510,16 @@ Bool gf_props_type_is_enum(GF_PropType type);
 */
 u32 gf_props_parse_enum(u32 type, const char *value);
 
+/*! Parses a property value from string
+\param type property type to parse
+\param name property name to parse (for logs)
+\param value string containing the value to parse
+\param enum_values string containig enum_values, or NULL. enum_values are used for unsigned int properties, take the form "a|b|c" and resolve to 0|1|2.
+\param list_sep_char value of the list separator character to use
+\return the parsed property value
+*/
+GF_PropertyValue gf_props_parse_value(u32 type, const char *name, const char *value, const char *enum_values, char list_sep_char);
+
 /*! Get the name of a constant type property value
 \param type  property type
 \param value value of constant
@@ -1469,16 +1539,10 @@ const char *gf_props_enum_all_names(u32 type);
 */
 u32 gf_props_get_base_type(u32 type);
 
-
-/*! Parses a property value from string
-\param type property type to parse
-\param name property name to parse (for logs)
-\param value string containing the value to parse
-\param enum_values string containig enum_values, or NULL. enum_values are used for unsigned int properties, take the form "a|b|c" and resolve to 0|1|2.
-\param list_sep_char value of the list separator character to use
-\return the parsed property value
+/*! Checks consistency of defined properties
+\return GF_TRUE if OK, GF_FALSE otherwise
 */
-GF_PropertyValue gf_props_parse_value(u32 type, const char *name, const char *value, const char *enum_values, char list_sep_char);
+Bool gf_props_sanity_check();
 
 /*! Maximum string size to use when dumping a property*/
 #define GF_PROP_DUMP_ARG_SIZE	100
@@ -1519,7 +1583,7 @@ const char *gf_props_dump(u32 p4cc, const GF_PropertyValue *att, char dump[GF_PR
 */
 void gf_props_reset_single(GF_PropertyValue *prop);
 
-/*! Property aplies only to packets */
+/*! Property applies only to packets - if not set, property only applies to PID*/
 #define GF_PROP_FLAG_PCK 1
 /*! Property is optional for GPAC GSF serialization (not transmitted over network when property removal is enabled) */
 #define GF_PROP_FLAG_GSF_REM 1<<1
@@ -1645,7 +1709,7 @@ GF_FEVT_PLAY and GF_FEVT_SET_SPEED events will trigger larger (abs(speed)>1) or 
 
 GF_FEVT_STOP and GF_FEVT_SOURCE_SEEK events are filtered to reset the PID buffers.
 
-The following events may be used globally on a filter, e.g. without a  PID associated to the event:
+The following events may be used globally on a filter, e.g. without a PID associated to the event:
 
 GF_FEVT_FILE_DELETE: used for source and sinks, indicata a file deletion
 
@@ -1655,7 +1719,7 @@ GF_FEVT_QUALITY_SWITCH: globally change quality of of the filters for all pids (
 
 GF_FEVT_USER:
 
-The filter session does not maintain a notion of paused or resume streams, it is up to the consummer to stop processing the data wgile paused.
+The filter session does not maintain a notion of paused or resume streams, it is up to the consummer to stop processing the data while paused.
 The GF_FEVT_PAUSE and GF_FEVT_RESUME events are only used to trigger pause and resume on interactive channels such as an RTSP session, i.e. to tell the remote peer to stop and resume.
 
 @{
@@ -1695,7 +1759,7 @@ typedef enum
 	GF_FEVT_BUFFER_REQ,
 	/*! filter session capability change, sent whenever global capabilities (max width, max height, ... ) are changed*/
 	GF_FEVT_CAPS_CHANGE,
-	/*! inidicates the PID could not be connected - the PID passed is an output PID of the filter, no specific event structure is associated*/
+	/*! indicates the PID could not be connected - the PID passed is an output PID of the filter, no specific event structure is associated*/
 	GF_FEVT_CONNECT_FAIL,
 	/*! user event, sent from compositor/vout down to filters*/
 	GF_FEVT_USER,
@@ -1711,6 +1775,10 @@ typedef enum
 	GF_FEVT_ENCODE_HINTS,
 	/*! NTP source clock send by other services (eg from TS to dash using TEMI) */
 	GF_FEVT_NTP_REF,
+	/*! Event sent by DASH/HLS demux to source to notify a quality change  - used for ROUTE/MABR only */
+	GF_FEVT_DASH_QUALITY_SELECT,
+	/*! Hint for network transmission event */
+	GF_FEVT_NETWORK_HINT
 } GF_FEventType;
 
 /*! type: the type of the event*/
@@ -1756,9 +1824,10 @@ typedef struct
 		0: range is in media time
 		1: range is in timesatmps
 		2: range is in media time but timestamps should not be shifted (hybrid dash only for now)
+		3: range is in media time and seeking is disabled (closest RAP is used and no seek flags on packets)
 	*/
 	u8 timestamp_based;
-	/*! GF_FEVT_PLAY only, indicates the consumer only cares for the full file, not packets*/
+	/*! GF_FEVT_PLAY / GF_FEVT_PLAY_HINT, indicates the consumer only cares for the full file, not packets*/
 	u8 full_file_only;
 	/*!
 	 for GF_FEVT_PLAY: indicates any current download should be aborted
@@ -1936,6 +2005,46 @@ typedef struct
 
 } GF_FEVT_NTPRef;
 
+/*! Quality selection state*/
+typedef enum
+{
+	/*! Quality is selected*/
+	GF_QUALITY_SELECTED = 0,
+	/*! Quality is not selected*/
+	GF_QUALITY_UNSELECTED,
+	/*! Quality is disabled and will never be selected*/
+	GF_QUALITY_DISABLED
+} GF_QualtitySelectionState;
+
+/*! Event structure for GF_FEVT_DASH_QUALITY_SELECT*/
+typedef struct
+{
+	FILTER_EVENT_BASE
+	/*! service ID as advertised by the source PID carrying the manifest*/
+	u32 service_id;
+	/*! ID of period */
+	const char *period_id;
+	/*! ID of adaptation set */
+	s32 as_id;
+	/*! ID of representation for DASH, URL of variant playlist for HLS */
+	const char *rep_id;
+	/*! selection state */
+	GF_QualtitySelectionState select_type;
+} GF_FEVT_DASHQualitySelection;
+
+/*! Event structure for GF_FEVT_NETWORK_HINT*/
+typedef struct
+{
+	FILTER_EVENT_BASE
+
+	/*! MTU size  */
+	u32 mtu_size;
+
+	/*! output type , 4CC (currently only MABR defined */
+	u32 sink_type;
+
+} GF_FEVT_NetworkHint;
+
 /*!
 Filter Event object
  */
@@ -1954,6 +2063,8 @@ union __gf_filter_event
 	GF_FEVT_FileDelete file_del;
 	GF_FEVT_EncodeHints encode_hints;
 	GF_FEVT_NTPRef ntp;
+	GF_FEVT_DASHQualitySelection dash_select;
+	GF_FEVT_NetworkHint net_hint;
 };
 
 /*! Gets readable name for event type
@@ -2021,6 +2132,8 @@ typedef enum
 		The filter should lock itself whenever appropriate using \ref gf_filter_lock
 	*/
 	GF_FS_ARG_UPDATE_SYNC = 1<<8,
+	/*! internal flag used by meta filters (ffmpeg & co) to indicate the argument is an array of the indicated type*/
+	GF_FS_ARG_META_ARRAY = 1<<9,
 } GF_FSArgumentFlags;
 
 /*! Structure holding arguments for a filter*/
@@ -2111,8 +2224,16 @@ enum
 	GF_CAPFLAG_LOADED_FILTER = 1<<4,
 	/*! indicates that this capability (input or output) applies to all following bundles. This avoids repeating capabilities common to all bundles by setting them only in the first*/
 	GF_CAPFLAG_STATIC = 1<<5,
-	/*! Only used for input capabilities, indicates that this capability is optional in the input PID */
+	/*! Currently only used for output  capabilities, indicates that this capability is optional in the  PID */
 	GF_CAPFLAG_OPTIONAL = 1<<6,
+	/*! Only checks presence of capability */
+	GF_CAPFLAG_PRESENT = 1<<7,
+	/*! Indicates this capability is only used on reconfigure - ignored for graph resolution - reconfig caps shall be placed last
+		The value of such caps is ignored, only the type/name is used
+
+	This cap should only be set for reconfigurable filters intended to be dynamically loaded for adaptation (eg resamplers, color-space conversion, rescalers)
+	*/
+	GF_CAPFLAG_RECONFIG = 1<<8,
 };
 
 /*! Shortcut macro to set for input capability flags*/
@@ -2288,7 +2409,8 @@ typedef enum
 	a GL context (currently only in main thread) upon init, but not requiring it for the decode. Such decoders get their GL frames mapped
 	(through get_gl_texture callback) in the main GL thread*/
 	GF_FS_REG_CONFIGURE_MAIN_THREAD = 1<<2,
-	/*! when set indicates the filter does not take part of dynamic filter chain resolution and can only be used by explicitly loading the filter*/
+	/*! when set indicates the filter does not take part of dynamic filter chain resolution and can only be used by explicitly loading the filter
+	A filter with this flag and a \ref reconfigure_output callback set will be checked when loading a chain for PID property adaptation*/
 	GF_FS_REG_EXPLICIT_ONLY = 1<<3,
 	/*! when set ignores the filter weight during link resolution - this is typically needed by decoders requiring a specific reframing so that the weight of the reframer+decoder is the same as the weight of other decoders*/
 	GF_FS_REG_HIDE_WEIGHT = 1<<4,
@@ -2317,7 +2439,7 @@ typedef enum
 	GF_FS_REG_FORCE_REMUX = 1<<12,
 	/*! Indicates the filter must always be run by the same thread, except for the initialize and finalize methods*/
 	GF_FS_REG_SINGLE_THREAD = 1<<13,
-	/*! Indicates the filter needs to be initialized even if temoorary - see \ref gf_filter_is_temporary. Always enabled if GF_FS_REG_META is set */
+	/*! Indicates the filter needs to be initialized even if temporary - see \ref gf_filter_is_temporary. Always enabled if GF_FS_REG_META is set */
 	GF_FS_REG_TEMP_INIT = 1<<14,
 	/*! Indicates the filter uses libc sync file read - only needed for emscripten multithreaded support for now, translated into GF_FS_REG_MAIN_THREAD */
 	GF_FS_REG_USE_SYNC_READ = 1<<15,
@@ -2325,11 +2447,49 @@ typedef enum
 	GF_FS_REG_BLOCK_MAIN = 1<<16,
 	/*! Indicates the filter uses async tools (JS promises & co) blocking the calling thread until resolved - only needed for emscripten multithreaded support*/
 	GF_FS_REG_ASYNC_BLOCK = 1<<17,
+	/*! Indicates a dynamic instance of the filter can be reused in resolver even if the source PID already has a possible link to an explicit non-sink filter
+		This is typically required by PID merger filters allowing implicit loading (tileagg, hevcmerge, etc)
+	*/
+	GF_FS_REG_DYNAMIC_REUSE = 1<<18,
 
 
 	/*! flag dynamically set at runtime for custom filters*/
 	GF_FS_REG_CUSTOM = 0x40000000,
 } GF_FSRegisterFlags;
+
+/*! Filter class type hint - these are only informative, used to generate documentation - the order of the enum corresponds to order of section in wki*/
+typedef enum
+{
+	/*! unspecified class type */
+	GF_FS_CLASS_UNSPECIFIED = 0,
+	/*! filter is a stream manipulation tool */
+	GF_FS_CLASS_STREAM,
+	/*! filter is a multimedia input/input  tool */
+	GF_FS_CLASS_MM_IO,
+	/*! filter is a file/network/protocols input/output  tool */
+	GF_FS_CLASS_NETWORK_IO,
+	/*! filter is a text and subtitle tool */
+	GF_FS_CLASS_SUBTITLE,
+	/*! filter is a raw audio/video tool */
+	GF_FS_CLASS_AV,
+	/*! filter is a generic tool */
+	GF_FS_CLASS_TOOL,
+	/*! filter is a cryptographic tool */
+	GF_FS_CLASS_CRYPTO,
+	/*! filter is a bitstream framing/unframing tool */
+	GF_FS_CLASS_FRAMING,
+	/*! filter is a demultiplexer */
+	GF_FS_CLASS_DEMULTIPLEXER,
+	/*! filter is a multiplexer */
+	GF_FS_CLASS_MULTIPLEXER,
+	/*! filter is a decoder */
+	GF_FS_CLASS_DECODER,
+	/*! filter is an encoder */
+	GF_FS_CLASS_ENCODER,
+	/*! any  value above this is considered as unknown */
+	GF_FS_CLASS_LAST_DEFINED,
+
+} GF_ClassTypeHint;
 
 /*! The filter register. Registries are loaded once at the start of the session and shall never be modified after that.
 If capabilities need to be changed for a specific filter, use \ref gf_filter_override_caps*/
@@ -2395,7 +2555,7 @@ struct __gf_filter_register
 	*/
 	GF_Err (*initialize)(GF_Filter *filter);
 
-	/*! optional - callback for filter desctruction -  private stack of filter is freed by framework
+	/*! optional - callback for filter destruction -  private stack of filter is freed by framework
 	\param filter the target filter
 	*/
 	void (*finalize)(GF_Filter *filter);
@@ -2421,7 +2581,8 @@ struct __gf_filter_register
 	*/
 	Bool (*process_event)(GF_Filter *filter, const GF_FilterEvent *evt);
 
-	/*! optional - Called whenever an output PID needs format renegotiation. If not set, a filter chain will be loaded to solve the negotiation
+	/*! optional - Called whenever an output PID needs format renegotiation. If not set, a filter chain will be loaded to solve the negotiation, checking for filters with
+ this function set and with reconfigurable caps matching the negotiated set of properties.
 
 	\param filter the target filter
 	\param PID the filter output PID being reconfigured
@@ -2451,7 +2612,10 @@ struct __gf_filter_register
 
 	/*! for filters having the same match of input capabilities for a PID, the filter with priority at the lowest value will be used
 	\note Scalable decoders should use high values, so that they are only selected when enhancement layers are present*/
-	u8 priority;
+	s16 priority;
+
+	/*! hint class type for doc generation, one of GF_ClassTypeHint */
+	u8 hint_class_type;
 
 	/*! optional for dynamic filter registries. Dynamic registries may declare any number of registries. The register_free function will be called to cleanup any allocated memory
 
@@ -2587,7 +2751,7 @@ struct _gf_ft_mgr *gf_filter_get_font_manager(GF_Filter *filter);
 /*! Asks task reschedule for a given delay. There is no guarantee that the task will be recalled at exactly the desired delay
 
  The function can be called several times while in process, the smallest reschedule time will be kept.
- 
+
 \param filter target filter
 \param us_until_next number of microseconds to wait before recalling this task
 */
@@ -2681,6 +2845,18 @@ void gf_filter_block_eos(GF_Filter *filter, Bool do_block);
 \return the new source filter instance or NULL if error
 */
 GF_Filter *gf_filter_connect_source(GF_Filter *filter, const char *url, const char *parent_url, Bool inherit_args, GF_Err *err);
+
+/*! Connects a source to the session, copying FilterID and sourceID of this filter source..
+\note The loaded filter will not connect to the calling filter, and will have the same ID, subsession_id and source_id as the first source of the filter
+
+\param filter the target filter
+\param url url of source to connect to, with optional arguments.
+\param parent_url url of parent if any
+\param inherit_args if GF_TRUE, the source to connect will inherit arguments of the first source of the filter
+\param err return code - can be NULL
+\return the new source filter instance or NULL if error
+*/
+GF_Filter *gf_filter_add_source(GF_Filter *filter, const char *url, const char *parent_url, Bool inherit_args, GF_Err *err);
 
 /*! Connects a destination to this filter
 \param filter the target filter
@@ -2890,7 +3066,7 @@ void gf_filter_send_event(GF_Filter *filter, GF_FilterEvent *evt, Bool upstream)
 /*! Trigger reconnection of output PIDs of a filter. This is needed when inserting a filter in the chain while the session is running
 \param filter the target filter
 \param for_pid reconnects only the given output PID - if NULL, reconnect all output PIDs
-\return error if any
+\return error if any, GF_EOS if no output pids available
 */
 GF_Err gf_filter_reconnect_output(GF_Filter *filter, GF_FilterPid *for_pid);
 
@@ -3176,6 +3352,19 @@ GF_Err gf_filter_set_description(GF_Filter *filter, const char *new_desc);
 */
 const char *gf_filter_get_description(GF_Filter *filter);
 
+/*! used by script to set a per-instance class hint
+\param filter target filter
+\param class_hint theclass hint to set
+\return error if any
+*/
+GF_Err gf_filter_set_class_hint(GF_Filter *filter, GF_ClassTypeHint class_hint);
+
+/*! get a per-instance class hint
+\param filter target filter
+\return the filter instance description, NULL otherwise
+*/
+GF_ClassTypeHint gf_filter_get_class_hint(GF_Filter *filter);
+
 /*! used by script to set a per-instance version
 \param filter target filter
 \param new_version the new version to set
@@ -3296,11 +3485,26 @@ Bool gf_filter_relocate_url(GF_Filter *filter, const char *service_url, const ch
 */
 GF_Err gf_filter_probe_link(GF_Filter *filter, u32 opid_idx, const char *fname, char **result_chain);
 
+/*! Probes for possible link resolution towards a given filter description. Same as \ref gf_filter_probe_link but tests multiple links
+
+The syntax for each chain is `D;P,filters` with:
+- `D`: distance between the source and target, as seen by the graph resolver (some filters may hide their distance)
+- `P`: priority of the chain
+- `filters`: comma-separated list of filters
+
+\param filter target filter
+\param opid_idx output pid index of target filter
+\param fname textual description of filter - If a source is used, returns an error. Destination can be identified using dst=URL pattern
+\param result_chain resulting chains separated by a pipe character ('|') or NULL if error. MUST be freed by caller
+\return error if any
+*/
+GF_Err gf_filter_probe_links(GF_Filter *filter, u32 opid_idx, const char *fname, char **result_chain);
+
 /*! Gets list of possible destinations for this filter
 \param filter target filter
 \param opid_idx output pid index of target filter. If negative, will check destinations for any of the output pids
-\param result_list resulting list as comma-separated list, or NULL if error. MUST be freed by caller
-\return error if any
+\param result_list resulting list as comma-separated list, or NULL if error. MUST be freed by caller. An empty chain means direct connection is possible
+\return error if any, GF_FILTER_NOT_FOUND if no available destinations
 */
 GF_Err gf_filter_get_possible_destinations(GF_Filter *filter, s32 opid_idx, char **result_list);
 
@@ -3479,7 +3683,7 @@ GF_Err gf_filter_pid_set_property_str(GF_FilterPid *PID, const char *name, const
 GF_Err gf_filter_pid_set_property_dyn(GF_FilterPid *PID, char *name, const GF_PropertyValue *value);
 
 /*! Sets a new info property on an output PID for built-in property names.
-Similar to \ref gf_filter_pid_set_property, but infos are not copied up the chain and to not trigger PID reconfiguration.
+Similar to \ref gf_filter_pid_set_property, but infos are not copied up the chain and do not trigger PID reconfiguration.
 First packet dispatched after calling this function will be marked, and its fetching by the consuming filter will trigger a process_event notification.
 If the consuming filter copies properties from source packet to output packet, the flag will be passed to such new output packet.
 
@@ -3724,7 +3928,7 @@ typedef struct
 	/*! loss rate in per-thousand - input pid only */
 	u32 loss_rate;
 
-	/*! timestamp and timescale of last packet droped
+	/*! timestamp and timescale of last packet dropped
 		- For input PID, set to last packet dropped
 		- For output PID, set to maximum TS value of last packet dropped on all PID destinations
 	*/
@@ -4133,6 +4337,12 @@ GF_Err gf_filter_pid_allow_direct_dispatch(GF_FilterPid *PID);
 */
 void *gf_filter_pid_get_alias_udta(GF_FilterPid *PID);
 
+/*! Gets the filter owning the PID
+\param PID the target filter PID
+\return the filter owning the PID or NULL if error
+*/
+GF_Filter *gf_filter_pid_get_owner(GF_FilterPid *PID);
+
 /*! Gets the filter owning the  input PID
 \param PID the target filter PID
 \return the filter owning the PID or NULL if error
@@ -4216,7 +4426,7 @@ reassign output packet properties changed by the filter.
 In order to handle reordering of packets, it is possible to keep references to either packets (may block the filter chain), or packet properties.
 
 Packets shall always be dispatched in their processing order (decode order). If reordering upon reception is needed, or AU interleaving is used, a filter SHALL do the reordering.
-However, packets do not have to be send in their creation order: a created packet is not assigned to PID buffers until it is sent.
+However, packets do not have to be sent in their creation order: a created packet is not assigned to PID buffers until it is sent.
 
 @{
  */
@@ -4327,14 +4537,26 @@ If the source packet uses a frame interface object or has no associated data, re
 If the source packet is referenced more than once (ie more than just the caller), a new packet on the output PID is allocated with source data copied.
 Otherwise, the source data is assigned to the output packet.
 
-This is typically called by filters requiring read access to data for packets using frame interfaces
-\warning The cloned packet will not have any dynamic properties set.
+This is typically called by filters requiring read access to data for packets using frame interfaces.
 
 \param pck_source the target source packet
 \param cached_pck if not NULL, will try to reuse this packet if possible (if not possible, this packet will be destroyed)
 \return new packet or NULL if allocation error or not an output PID
 */
 GF_FilterPacket *gf_filter_pck_dangling_copy(GF_FilterPacket *pck_source, GF_FilterPacket *cached_pck);
+
+/*! Creates a detached clone of a packet from a source packet and copy all source properties to output.
+
+If the source packet uses a frame interface object or has no associated data, returns a copy of the packet.
+Otherwise, the source data is copied in the output packet.
+
+This is typically called by filters reaggregating packets on their own.
+
+\param pck_source the target source packet
+\param cached_pck if not NULL, will try to reuse this packet if possible (if not possible, this packet will be destroyed)
+\return new packet or NULL if allocation error or not an output PID
+*/
+GF_FilterPacket *gf_filter_pck_dangling_clone(GF_FilterPacket *pck_source, GF_FilterPacket *cached_pck);
 
 /*! Marks memory of a shared packet as non-writable. By default \ref gf_filter_pck_new_shared and \ref gf_filter_pck_new_ref allow
 write access to internal memory in case the packet can be cloned (single reference used). If your filter relies on the content of the shared
@@ -4361,6 +4583,8 @@ void gf_filter_pck_check_realloc(GF_FilterPacket *pck, u8 *data, u32 size);
 
 /*! Sends the packet on its output PID. Packets SHALL be sent in processing order (eg, decoding order for video).
 However, packets don't have to be sent in their allocation order.
+Packet shall not be modified after this call, as it may be discarded during the call.
+
 \param pck the target output packet to send
 \return error if any
 */

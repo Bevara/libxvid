@@ -2,7 +2,7 @@
  *			GPAC - Multimedia Framework C SDK
  *
  *			Authors: Jean Le Feuvre
- *			Copyright (c) Telecom ParisTech 2000-2023
+ *			Copyright (c) Telecom ParisTech 2000-2025
  *					All rights reserved
  *
  *  This file is part of GPAC / MPEG-1/2/4(Part2) video reframer filter
@@ -109,19 +109,24 @@ GF_Err mpgviddmx_configure_pid(GF_Filter *filter, GF_FilterPid *pid, Bool is_rem
 		return GF_NOT_SUPPORTED;
 
 	ctx->ipid = pid;
-	ctx->cur_fps = ctx->fps;
-	if (!ctx->fps.num || !ctx->fps.den) {
-		ctx->cur_fps.num = 25000;
-		ctx->cur_fps.den = 1000;
+	if (!ctx->cur_fps.num) {
+		ctx->cur_fps = ctx->fps;
+		if (!ctx->fps.num || !ctx->fps.den) {
+			ctx->cur_fps.num = 25000;
+			ctx->cur_fps.den = 1000;
+		}
 	}
 
 	p = gf_filter_pid_get_property(pid, GF_PROP_PID_TIMESCALE);
 	if (p) {
-		ctx->timescale = ctx->cur_fps.num = p->value.uint;
-		ctx->cur_fps.den = 0;
+		u32 old_timescale = ctx->timescale;
+		ctx->timescale = p->value.uint;
 		p = gf_filter_pid_get_property(pid, GF_PROP_PID_FPS);
 		if (p) {
 			ctx->cur_fps = p->value.frac;
+		} else if (!old_timescale || (old_timescale != ctx->timescale)) {
+			ctx->cur_fps.den = 0;
+			ctx->cur_fps.num = ctx->timescale;
 		}
 		p = gf_filter_pid_get_property_str(pid, "nocts");
 		if (p && p->value.boolean) ctx->recompute_cts = GF_TRUE;
@@ -737,9 +742,11 @@ GF_Err mpgviddmx_process(GF_Filter *filter)
 		//we have some potential bytes of a start code in the store, copy some more bytes and check if valid start code.
 		//if not, dispatch these bytes as continuation of the data
 		if (ctx->bytes_in_header) {
+			u32 csize = MIN_HDR_STORE - ctx->bytes_in_header;
+			if (csize > (u32) remain) csize=remain;
 			//the two zones may overlap
-			memmove(ctx->hdr_store + ctx->bytes_in_header, start, MIN_HDR_STORE - ctx->bytes_in_header);
-			current = mpgviddmx_next_start_code(ctx->hdr_store, MIN_HDR_STORE);
+			memmove(ctx->hdr_store + ctx->bytes_in_header, start, csize);
+			current = mpgviddmx_next_start_code(ctx->hdr_store, ctx->bytes_in_header+csize);
 
 			//no start code in stored buffer
 			if ((current<0) || (current >= (s32) ctx->bytes_in_header) )  {
@@ -1403,7 +1410,8 @@ GF_FilterRegister MPGVidDmxRegister = {
 	.configure_pid = mpgviddmx_configure_pid,
 	.process = mpgviddmx_process,
 	.probe_data = mpgvdmx_probe_data,
-	.process_event = mpgviddmx_process_event
+	.process_event = mpgviddmx_process_event,
+	.hint_class_type = GF_FS_CLASS_FRAMING
 };
 
 
