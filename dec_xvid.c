@@ -473,3 +473,9 @@ const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE dynCall_xviddec_register(GF_Filte
 	return NULL;
 #endif
 }
+
+#include "filter_register.h"
+__attribute__((constructor))
+void register_xviddec(void) {
+    gf_filter_auto_register("xviddec", dynCall_xviddec_register);
+}

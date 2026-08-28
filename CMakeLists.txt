@@ -3,6 +3,10 @@ project(Filters)
 
 include(filters.cmake)
 
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra")
+set(CMAKE_C_FLAGS "-O3 -Wall -Wextra")
+
 add_definitions(-fpic)
 
 SET(XVIDDEC_SRC

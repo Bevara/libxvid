@@ -1425,3 +1425,9 @@ const GF_FilterRegister *dynCall_mpgviddmx_register(GF_FilterSession *session)
 	return NULL;
 }
 #endif // #if !defined(GPAC_DISABLE_AV_PARSERS) && !defined(GPAC_DISABLE_RFMPGVID)
+
+#include "filter_register.h"
+__attribute__((constructor))
+void register_mpgviddmx(void) {
+    gf_filter_auto_register("mpgviddmx", dynCall_mpgviddmx_register);
+}
