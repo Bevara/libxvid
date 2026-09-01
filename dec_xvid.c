@@ -465,7 +465,7 @@ GF_FilterRegister XVIDRegister = {
 
 #endif
 
-const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE dynCall_xviddec_register(GF_FilterSession *session)
+const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE xviddec_register(GF_FilterSession *session)
 {
 #if !defined(GPAC_DISABLE_AV_PARSERS) && defined(GPAC_HAS_XVID)
 	return &XVIDRegister;
@@ -477,5 +477,5 @@ const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE dynCall_xviddec_register(GF_Filte
 #include "filter_register.h"
 __attribute__((constructor))
 void register_xviddec(void) {
-    gf_filter_auto_register("xviddec", dynCall_xviddec_register);
+    gf_filter_auto_register("xviddec", xviddec_register);
 }

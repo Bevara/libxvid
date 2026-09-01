@@ -1415,12 +1415,12 @@ GF_FilterRegister MPGVidDmxRegister = {
 };
 
 
-const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE dynCall_mpgviddmx_register(GF_FilterSession *session)
+const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE mpgviddmx_register(GF_FilterSession *session)
 {
 	return &MPGVidDmxRegister;
 }
 #else
-const GF_FilterRegister *dynCall_mpgviddmx_register(GF_FilterSession *session)
+const GF_FilterRegister *mpgviddmx_register(GF_FilterSession *session)
 {
 	return NULL;
 }
@@ -1429,5 +1429,5 @@ const GF_FilterRegister *dynCall_mpgviddmx_register(GF_FilterSession *session)
 #include "filter_register.h"
 __attribute__((constructor))
 void register_mpgviddmx(void) {
-    gf_filter_auto_register("mpgviddmx", dynCall_mpgviddmx_register);
+    gf_filter_auto_register("mpgviddmx", mpgviddmx_register);
 }
