@@ -474,6 +474,7 @@ const GF_FilterRegister * EMSCRIPTEN_KEEPALIVE xviddec_register(GF_FilterSession
 #endif
 }
 
+/*Bevara: side modules register their own filters at load time.*/
 #include "filter_register.h"
 __attribute__((constructor))
 void register_xviddec(void) {
