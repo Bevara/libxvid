@@ -12,5 +12,6 @@
         "rfmpgvid" : "reframe_mpegvid.c"
     },
     "Format": ["xvid","MPEG-4 Visual"],
-    "licence_required":false
+    "licence_required":false,
+    "using": ["solver_minimal_1", "solver_1"]
 }
