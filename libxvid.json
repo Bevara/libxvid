@@ -1,5 +1,6 @@
 {
     "name": "libxvid",
+    "version": "1.0.1",
     "description": "XVid decoder",
     "filters":["xviddec","rfmpgvid"],
     "help": "This filter decodes MPEG-4 part 2 (and DivX) through libxvidcore library.",
