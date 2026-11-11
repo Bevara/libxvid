@@ -2,18 +2,31 @@
     "name": "libxvid",
     "version": "1.0.2",
     "description": "XVid decoder",
-    "filters":["xviddec","rfmpgvid"],
+    "filters": [
+        "xviddec",
+        "rfmpgvid"
+    ],
     "help": "This filter decodes MPEG-4 part 2 (and DivX) through libxvidcore library.",
     "support": [
         "video"
     ],
-    "sources":"https://codeload.github.com/Bevara/libxvid/zip/refs/heads/main",
-    "filter_source":{
-        "xviddec" : "dec_xvid.c",
-        "rfmpgvid" : "reframe_mpegvid.c"
+    "sources": "https://codeload.github.com/Bevara/libxvid/zip/refs/heads/main",
+    "filter_source": {
+        "xviddec": "dec_xvid.c",
+        "rfmpgvid": "reframe_mpegvid.c"
     },
-    "Format": ["xvid","MPEG-4 Visual"],
-    "using": ["mm_solver_minimal_1.0.1", "mm_solver_1.0.1", "mm_solver_1.0.2", "mm_solver_1.0.3", "mm_solver_1.0.4"],
+    "Format": [
+        "xvid",
+        "MPEG-4 Visual"
+    ],
+    "using": [
+        "mm_solver_minimal_1.0.1",
+        "mm_solver_1.0.1",
+        "mm_solver_1.0.2",
+        "mm_solver_1.0.3",
+        "mm_solver_1.0.4",
+        "mm_solver_1.0.5"
+    ],
     "patents": {
         "status": "under-review",
         "note": "MPEG-4 Part 2: expiry of the last MPEG LA patents not verified",
